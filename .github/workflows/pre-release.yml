@@ -3,21 +3,20 @@ name: pre-release
 
 on:
   push:
-    branches: ['main']
+    branches: ["main"]
     paths-ignore:
-      - '**.md'
-  workflow_dispatch:
+      - "**.md"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build-windows:
-    name: '[Windows] Build and Publish'
+    name: "[Windows] Build and Publish"
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build
         run: cargo build --release
@@ -28,18 +27,21 @@ jobs:
       - name: Publish files
         run: cargo make dist
 
+      - name: Zip artifact for deployment
+        run: Compress-Archive -Path dist/* -Destination windows.zip
+
       - name: Upload files
         uses: actions/upload-artifact@v4
         with:
-          path: dist
+          path: windows.zip
           name: windows
 
   build-ubuntu:
-    name: '[Ubuntu] Build and Publish'
+    name: "[Ubuntu] Build and Publish"
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: ./install-build-deps.sh
@@ -53,35 +55,63 @@ jobs:
       - name: Publish files
         run: cargo make dist
 
+      - name: Zip artifact for deployment
+        run: cd dist && zip ../linux.zip *
+
       - name: Upload files
         uses: actions/upload-artifact@v4
         with:
-          path: dist
-          name: ubuntu
+          path: linux.zip
+          name: linux
+
+  build-macos:
+    name: "[Macos] Build and Publish"
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Install cargo-make
+        uses: davidB/rust-cargo-make@v1
+
+      - name: Publish files
+        run: cargo make dist
+
+      - name: Zip artifact for deployment
+        run: cd dist && zip ../macos.zip *
+
+      - name: Upload files
+        uses: actions/upload-artifact@v4
+        with:
+          path: macos.zip
+          name: macos
 
   pre-release:
     name: Pre-Release
     needs:
       - build-windows
       - build-ubuntu
+      - build-macos
     runs-on: ubuntu-latest
     permissions:
-      contents: 'write'
-      packages: 'write'
-      pull-requests: 'read'
+      contents: "write"
+      packages: "write"
+      pull-requests: "read"
 
     steps:
       - name: Download files
         uses: actions/download-artifact@v4
         with:
           path: dist
-          merge-multiple: true
 
       - name: Create Release
         uses: marvinpinto/action-automatic-releases@latest
         with:
-          repo_token: '${{ secrets.GITHUB_TOKEN }}'
-          automatic_release_tag: 'latest'
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
           prerelease: true
-          title: 'Latest Build'
+          title: "Latest Build"
           files: dist/**/*
